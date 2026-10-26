@@ -1,0 +1,335 @@
+-- ====================
+-- PLACE ID SECURITY CHECK
+-- ====================
+local TARGET_PLACE_ID = 75687962646869 -- Place ID +1 Gun Forge
+
+if game.PlaceId ~= TARGET_PLACE_ID then
+   -- Memunculkan notifikasi atau peringatan jika salah game
+   local StarterGui = game:GetService("StarterGui")
+   pcall(function()
+      StarterGui:SetCore("SendNotification", {
+         Title = "RedRose | Hub",
+         Text = "Gagal! Anda sedang berada di game yang salah.",
+         Duration = 5
+      })
+   end)
+   warn("[Security] Skrip ini hanya dapat digunakan di game +1 Gun Forge!")
+   return -- Menghentikan eksekusi skrip total
+end
+
+-- ====================
+-- MEMUAT RAYFIELD UI LIBRARY
+-- ====================
+local success, Rayfield = pcall(function()
+   return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+end)
+
+if not success or not Rayfield then
+   warn("Gagal memuat Rayfield UI Library! Coba gunakan executor lain atau periksa koneksi.")
+   return
+end
+
+local Window = Rayfield:CreateWindow({
+   Name = "+1 Gun Forge",
+   LoadingTitle = "Memuat Hub Eksklusif...",
+   LoadingSubtitle = "By RedRose",
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = "GunForgeHub",
+      FileName = "Config"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "noinvite",
+      RememberJoins = true
+   },
+   KeySystem = false,
+})
+
+-- Tab Utama & Tab Combat/Farm
+local MainTab = Window:CreateTab("Main", 4483362458)
+local FarmTab = Window:CreateTab("Combat & Loot", 4483362458)
+
+-- Variabel Status
+local autoShootEnabled = false
+local autoShootDelay = 0.5
+local autoTrainEnabled = false
+local fastReloadEnabled = false
+
+local killAuraEnabled = false
+local killAuraRange = 250
+local silentAimEnabled = false
+local aimTargetPartChoice = "Head"
+
+local autoLootEnabled = false
+local selectedLootTier = "All"
+
+-- Layanan & RemoteReferences
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local localPlayer = Players.LocalPlayer
+
+local remotes = ReplicatedStorage:WaitForChild("PlusPlus"):WaitForChild("Remotes")
+local requestFireEvent = remotes:WaitForChild("RequestFire")
+local requestReloadEvent = remotes:WaitForChild("RequestReload")
+local hitEvent = remotes:WaitForChild("Hit")
+local lootDropEvent = remotes:WaitForChild("LootDrop")
+
+-- ====================
+-- TAB MAIN (SHOOT & TRAIN)
+-- ====================
+MainTab:CreateSection("Combat")
+
+MainTab:CreateSlider({
+   Name = "Auto Shoot Delay (Detik)",
+   Range = {0.05, 2},
+   Increment = 0.05,
+   CurrentValue = 0.5,
+   Flag = "ShootDelaySlider",
+   Callback = function(Value)
+      autoShootDelay = Value
+   end,
+})
+
+MainTab:CreateToggle({
+   Name = "Auto Shoot",
+   CurrentValue = false,
+   Flag = "AutoShootToggle",
+   Callback = function(Value)
+      autoShootEnabled = Value
+      task.spawn(function()
+         while autoShootEnabled do
+            pcall(function()
+               local shootCFrame = CFrame.new(108.92766571044922, 59.298542022705078, 80.361518859863281, -0.97193503379821777, 0.038674578070640564, -0.23204833269119263, 0, 0.98639392852783203, 0.16439840197563171, 0.2352491170167923, 0.15978457033634186, -0.95871096849441528)
+               requestFireEvent:FireServer(nil, shootCFrame)
+            end)
+            task.wait(autoShootDelay)
+         end
+      end)
+   end,
+})
+
+MainTab:CreateSection("Training")
+
+MainTab:CreateToggle({
+   Name = "Auto Train (Hit Target)",
+   CurrentValue = false,
+   Flag = "AutoTrainToggle",
+   Callback = function(Value)
+      autoTrainEnabled = Value
+      task.spawn(function()
+         while autoTrainEnabled do
+            pcall(function()
+               local targetPart = Workspace:FindFirstChild("Lobby") 
+                  and Workspace.Lobby:FindFirstChild("TrainingPads") 
+                  and Workspace.Lobby.TrainingPads:FindFirstChild("Pad1_5x") 
+                  and Workspace.Lobby.TrainingPads.Pad1_5x:FindFirstChild("Target") 
+                  and Workspace.Lobby.TrainingPads.Pad1_5x.Target:FindFirstChild("Face") 
+                  and Workspace.Lobby.TrainingPads.Pad1_5x.Target.Face:FindFirstChild("Rings")
+               
+               if targetPart then
+                  firesignal(hitEvent.OnClientEvent, targetPart, 1, false)
+               end
+            end)
+            task.wait(0.1)
+         end
+      end)
+   end,
+})
+
+MainTab:CreateSection("Weapon")
+
+MainTab:CreateToggle({
+   Name = "Fast Reload",
+   CurrentValue = false,
+   Flag = "FastReloadToggle",
+   Callback = function(Value)
+      fastReloadEnabled = Value
+      task.spawn(function()
+         while fastReloadEnabled do
+            pcall(function()
+               requestReloadEvent:FireServer()
+            end)
+            task.wait(0.5)
+         end
+      end)
+   end,
+})
+
+-- ====================
+-- TAB COMBAT & LOOT (SILENT AIM & AUTO LOOT)
+-- ====================
+FarmTab:CreateSection("Silent Aim & KillAura Settings")
+
+FarmTab:CreateDropdown({
+   Name = "Target Part (Head / Body)",
+   Options = {"Head", "HumanoidRootPart"},
+   CurrentOption = "Head",
+   Flag = "AimPartDropdown",
+   Callback = function(Option)
+      aimTargetPartChoice = Option
+   end,
+})
+
+FarmTab:CreateSlider({
+   Name = "Range Radius",
+   Range = {50, 600},
+   Increment = 10,
+   CurrentValue = 250,
+   Flag = "KillAuraRangeSlider",
+   Callback = function(Value)
+      killAuraRange = Value
+   end,
+})
+
+FarmTab:CreateToggle({
+   Name = "Silent Aim (Auto Lock Global)",
+   CurrentValue = false,
+   Flag = "SilentAimToggle",
+   Callback = function(Value)
+      silentAimEnabled = Value
+      task.spawn(function()
+         while silentAimEnabled do
+            pcall(function()
+               local char = localPlayer.Character
+               if char and char:FindFirstChild("HumanoidRootPart") then
+                  local rootPos = char.HumanoidRootPart.Position
+                  local enemyFolder = Workspace:FindFirstChild("EnemyFolder")
+                  
+                  if enemyFolder then
+                     local closestEnemy = nil
+                     local shortestDist = killAuraRange
+                     
+                     for _, enemyModel in ipairs(enemyFolder:GetChildren()) do
+                        if enemyModel:IsA("Model") then
+                           local enemyId = enemyModel:GetAttribute("EnemyId")
+                           local hp = enemyModel:GetAttribute("Hp")
+                           local targetPart = enemyModel:FindFirstChild(aimTargetPartChoice) or enemyModel:FindFirstChild("HumanoidRootPart") or enemyModel.PrimaryPart
+                           
+                           if type(enemyId) == "number" and hp and hp > 0 and targetPart then
+                              local dist = (targetPart.Position - rootPos).Magnitude
+                              if dist < shortestDist then
+                                 shortestDist = dist
+                                 closestEnemy = {
+                                    EnemyId = enemyId,
+                                    Part = targetPart,
+                                    Position = targetPart.Position,
+                                    Model = enemyModel
+                                 }
+                              end
+                           end
+                        end
+                     end
+                     
+                     if closestEnemy then
+                        requestFireEvent:FireServer(closestEnemy.EnemyId, closestEnemy.Position)
+                     end
+                  end
+               end
+            end)
+            task.wait(0.1)
+         end
+      end)
+   end,
+})
+
+FarmTab:CreateToggle({
+   Name = "KillAura (Area Sweep)",
+   CurrentValue = false,
+   Flag = "KillAuraToggle",
+   Callback = function(Value)
+      killAuraEnabled = Value
+      task.spawn(function()
+         while killAuraEnabled do
+            pcall(function()
+               local char = localPlayer.Character
+               if char and char:FindFirstChild("HumanoidRootPart") then
+                  local rootPos = char.HumanoidRootPart.Position
+                  local enemyFolder = Workspace:FindFirstChild("EnemyFolder")
+                  
+                  if enemyFolder then
+                     for _, enemyModel in ipairs(enemyFolder:GetChildren()) do
+                        if enemyModel:IsA("Model") then
+                           local enemyId = enemyModel:GetAttribute("EnemyId")
+                           local hp = enemyModel:GetAttribute("Hp")
+                           local targetPart = enemyModel:FindFirstChild(aimTargetPartChoice) or enemyModel:FindFirstChild("HumanoidRootPart") or enemyModel.PrimaryPart
+                           
+                           if type(enemyId) == "number" and hp and hp > 0 and targetPart then
+                              local distance = (targetPart.Position - rootPos).Magnitude
+                              if distance <= killAuraRange then
+                                 requestFireEvent:FireServer(enemyId, targetPart.CFrame)
+                              end
+                           end
+                        end
+                     end
+                  end
+               end
+            end)
+            task.wait(0.15)
+         end
+      end)
+   end,
+})
+
+FarmTab:CreateSection("Auto Collect Drops (Instant)")
+
+FarmTab:CreateDropdown({
+   Name = "Pilih Tier / Rarity Drop",
+   Options = {"All", "slagstone", "voltshard", "common", "rare", "epic", "legendary"},
+   CurrentOption = "All",
+   Flag = "LootTierDropdown",
+   Callback = function(Option)
+      selectedLootTier = Option
+   end,
+})
+
+FarmTab:CreateToggle({
+   Name = "Auto Collect Drops (Instant)",
+   CurrentValue = false,
+   Flag = "AutoLootToggle",
+   Callback = function(Value)
+      autoLootEnabled = Value
+      task.spawn(function()
+         while autoLootEnabled do
+            pcall(function()
+               local char = localPlayer.Character
+               if char and char:FindFirstChild("HumanoidRootPart") then
+                  local pos = char.HumanoidRootPart.Position
+                  
+                  if lootDropEvent then
+                     firesignal(lootDropEvent.OnClientEvent, {
+                        {
+                           to = pos,
+                           tier = selectedLootTier == "All" and "slagstone" or selectedLootTier,
+                           id = math.random(300000, 399999),
+                           from = pos,
+                           fresh = true
+                        }
+                     })
+                  end
+                  
+                  for _, obj in ipairs(Workspace:GetChildren()) do
+                     if obj:IsA("BasePart") or obj:IsA("Model") then
+                        local nameLower = string.lower(obj.Name)
+                        if string.find(nameLower, "drop") or string.find(nameLower, "loot") or string.find(nameLower, "slagstone") or string.find(nameLower, "shard") then
+                           local targetPos = obj:IsA("Model") and (obj.PrimaryPart and obj.PrimaryPart.Position or obj:GetPivot().Position) or obj.Position
+                           if (targetPos - pos).Magnitude <= 300 then
+                              if obj:IsA("BasePart") then
+                                 obj.CFrame = char.HumanoidRootPart.CFrame
+                              elseif obj.PrimaryPart then
+                                 obj:SetPrimaryPartCFrame(char.HumanoidRootPart.CFrame)
+                              end
+                           end
+                        end
+                     end
+                  end
+               end
+            end)
+            task.wait(0.2)
+         end
+      end)
+   end,
+})
+
+Rayfield:LoadConfiguration()
